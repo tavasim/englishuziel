@@ -567,6 +567,15 @@ body {
   cursor: default;
 }
 
+/* Say: linear flow like spell; controls in the bottom panel */
+.mode-say .spell-panel {
+  display: block;
+}
+.mode-say .scene-canvas {
+  touch-action: auto;
+  cursor: default;
+}
+
 .scene-object--spell-focus .scene-object__icon {
   transform: scale(1.2);
   filter: drop-shadow(0 0 12px rgba(47, 111, 237, 0.6));
@@ -611,34 +620,6 @@ body {
 
 .scene-object--near {
   z-index: 3;
-}
-
-/* Say: Say it / Hear it / Check under each object */
-.mode-say .scene-object__actions {
-  pointer-events: auto;
-  margin-top: 0.15rem;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.25rem;
-  max-width: 11.5rem;
-}
-.mode-say .scene-object__action {
-  font-size: 0.62rem;
-  font-weight: 800;
-  padding: 0.22rem 0.4rem;
-  line-height: 1.15;
-  box-shadow: 0 2px 0 rgba(40, 60, 100, 0.35);
-  white-space: nowrap;
-}
-.mode-say .scene-object__say-mic {
-  box-shadow: 0 2px 0 #3d5a8a;
-}
-.mode-say .scene-object__check {
-  box-shadow: 0 2px 0 #1a4a9e;
-  padding-left: 0.45rem;
-  padding-right: 0.45rem;
 }
 
 .scene-object--solved .scene-object__icon {
@@ -865,21 +846,6 @@ body {
   .match-chip {
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
-  }
-
-  /* Say mode: tappable “Say it / Hear it / Check” (was ~tiny on phones) */
-  .mode-say .scene-object__actions {
-    max-width: min(12rem, 100%);
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.35rem;
-  }
-  .mode-say .scene-object__action {
-    font-size: 0.7rem;
-    min-height: 2.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .scene-hint {

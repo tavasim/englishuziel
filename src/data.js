@@ -1,5 +1,5 @@
 /**
- * word: target spelling. icon: emoji. who: true -> "Who am I?", false -> "What am I?"
+ * word: target spelling. icon: emoji. who: reserved for item type (e.g. person vs object)
  * size: icon scale (1 = default)
  * Item order = left-to-right in two rows (top row first, then bottom). Positions are computed in main.js.
  * Optional on a location: rowYTop, rowYBottom (percent) to tune the two rows.
@@ -8,7 +8,7 @@ export const locations = {
   zoo: {
     id: "zoo",
     title: "Zoo",
-    subtitle: "Move close to the animals!",
+    subtitle: "Examine the animals in the setting.",
     theme: "zoo",
     decor: ["🌳", "🦩", "🌿", "☀️"],
     items: [
@@ -73,7 +73,7 @@ export const locations = {
   classroom: {
     id: "classroom",
     title: "Classroom",
-    subtitle: "Move near things in the room!",
+    subtitle: "Identify the objects in the room.",
     theme: "classroom",
     decor: ["📚", "✏️", "🧮", "🍎"],
     items: [
@@ -114,7 +114,7 @@ export const locations = {
   playground: {
     id: "playground",
     title: "Playground",
-    subtitle: "Explore the play area!",
+    subtitle: "Review the items in the play area.",
     theme: "playground",
     decor: ["🌤️", "🪁", "🧢", "🌈"],
     items: [
