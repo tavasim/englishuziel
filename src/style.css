@@ -181,6 +181,66 @@ body {
   margin: 0 0 0.5rem;
 }
 
+/* —— Game mode picker (after choosing a place) */
+.mode-pick__lead {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.mode-pick__title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0.25rem 0;
+}
+
+.mode-pick__sub {
+  color: #3d4a5f;
+  font-weight: 600;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.mode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.mode-card {
+  border: none;
+  text-align: left;
+  font: inherit;
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(20, 30, 50, 0.12);
+}
+
+.mode-card__title {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #2f6fed;
+  margin-bottom: 0.25rem;
+}
+
+.mode-card__desc {
+  display: block;
+  font-size: 0.95rem;
+  color: #4a5568;
+  line-height: 1.35;
+}
+
 /* Stage: objects live in canvas; riddle is below and does not block hits */
 .scene-world {
   display: flex;
@@ -264,10 +324,225 @@ body {
   z-index: 2;
   transform: translate(-50%, -50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.1rem;
   pointer-events: none;
   transition: transform 0.2s ease, filter 0.2s ease, opacity 0.3s;
+}
+
+/* Name label; in Match, shown inside .object-name-box */
+.object-name-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #1a2744;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  max-width: 5.5rem;
+  text-align: center;
+  line-height: 1.1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.object-name-tag:empty {
+  display: none;
+}
+
+/* Hidden in Spell / Say; visible only in Match */
+.object-name-box {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 4.8rem;
+  min-height: 1.8rem;
+  max-width: 6.2rem;
+  margin-top: 0.1rem;
+  padding: 0.15rem 0.3rem 0.2rem;
+  border: 2px dashed #6b7fb8;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 3px rgba(40, 60, 100, 0.08);
+}
+
+.mode-match .object-name-box {
+  display: flex;
+}
+
+.mode-match .object-name-box:has(.object-name-tag:empty)::after {
+  content: "drop";
+  display: block;
+  font-size: 0.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b9bc0;
+  line-height: 1.1;
+  margin-top: 0.05rem;
+}
+
+.mode-match .object-name-box:has(.object-name-tag:empty) {
+  justify-content: center;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.mode-match .scene-object--matched .object-name-box,
+.mode-match .object-name-box:has(.object-name-tag:not(:empty)) {
+  border-style: solid;
+  border-color: #3d5a8f;
+  background: rgba(230, 242, 255, 0.95);
+  box-shadow: 0 2px 0 rgba(61, 90, 143, 0.2);
+}
+
+.mode-match .object-name-box:has(.object-name-tag:not(:empty))::after {
+  display: none;
+}
+
+/* Match: objects accept drops */
+.mode-match .scene-object {
+  pointer-events: auto;
+  cursor: default;
+  touch-action: none;
+}
+
+.mode-match .scene-canvas {
+  touch-action: none;
+  cursor: default;
+}
+
+.scene-object--wrong {
+  animation: shake 0.45s ease;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateX(0);
+  }
+  25% {
+    transform: translate(-50%, -50%) translateX(-6px);
+  }
+  75% {
+    transform: translate(-50%, -50%) translateX(6px);
+  }
+}
+
+.match-bank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.2rem;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem 0.9rem;
+  box-shadow: var(--shadow);
+}
+
+.match-bank__label {
+  width: 100%;
+  text-align: center;
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #38465e;
+}
+
+.match-chip {
+  background: #eef3ff;
+  border: 2px solid #8fa8e2;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #243352;
+  padding: 0.4rem 0.65rem;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 2px 0 #5a6fa8;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.match-chip.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
+}
+
+.match-chip.is-float {
+  position: fixed;
+  z-index: 200;
+  margin: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.match-chip.is-hidden {
+  display: none;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.match-msg {
+  text-align: center;
+  min-height: 1.2rem;
+  font-weight: 700;
+  color: var(--warn);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.match-done {
+  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  color: var(--ok);
+}
+
+/* Spell: highlight one object; panel always visible */
+.mode-spell-world {
+  min-height: auto;
+}
+
+.mode-spell .spell-panel {
+  display: block;
+}
+
+.mode-spell .scene-canvas {
+  touch-action: auto;
+  cursor: default;
+}
+
+.scene-object--spell-focus .scene-object__icon {
+  transform: scale(1.2);
+  filter: drop-shadow(0 0 12px rgba(47, 111, 237, 0.6));
+  animation: bob 1s ease-in-out infinite;
+}
+
+.spell-panel .spell-progress {
+  text-align: center;
+  font-weight: 700;
+  color: #5a6570;
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.spell-extra {
+  display: flex;
+  justify-content: center;
+  margin: 0.4rem 0 0.25rem;
+  min-height: 0;
 }
 
 .scene-object__icon {
