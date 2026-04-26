@@ -158,6 +158,71 @@ export const locations = {
       },
     ],
   },
+  clinic: {
+    id: "clinic",
+    title: "Clinic",
+    subtitle: "Identify the items in the care setting.",
+    theme: "clinic",
+    decor: ["🩺", "💉", "🏥", "✨"],
+    items: [
+      {
+        word: "NURSE",
+        who: true,
+        size: 1.05,
+        iconSrc: "/images/clinic-nurse.png",
+        icon: "🧑‍⚕️",
+      },
+      {
+        word: "DOCTOR",
+        who: true,
+        size: 0.95,
+        iconSrc: "/images/clinic-doctor.png",
+        icon: "👨‍⚕️",
+      },
+      {
+        word: "BANDAGE",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/clinic-bandage.png",
+        icon: "🩹",
+      },
+      {
+        word: "PILL",
+        who: false,
+        size: 0.95,
+        iconSrc: "/images/clinic-pill.png",
+        icon: "💊",
+      },
+      {
+        word: "STETHOSCOPE",
+        who: false,
+        size: 0.9,
+        iconSrc: "/images/clinic-stethoscope.png",
+        icon: "🩺",
+      },
+      {
+        word: "SYRINGE",
+        who: false,
+        size: 0.95,
+        iconSrc: "/images/clinic-syringe.png",
+        icon: "💉",
+      },
+      {
+        word: "WHEELCHAIR",
+        who: false,
+        size: 0.9,
+        iconSrc: "/images/clinic-wheelchair.png",
+        icon: "♿",
+      },
+      {
+        word: "MASK",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/clinic-mask.png",
+        icon: "😷",
+      },
+    ],
+  },
 };
 
 export const locationList = Object.values(locations);
