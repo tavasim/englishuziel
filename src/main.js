@@ -11,6 +11,12 @@ function speak(text) {
   window.speechSynthesis.speak(u);
 }
 
+function getSpeechRecognition() {
+  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Ctor) return null;
+  return new Ctor();
+}
+
 function el(tag, className, text) {
   const n = document.createElement(tag);
   if (className) n.className = className;
@@ -22,13 +28,23 @@ function clear() {
   app.replaceChildren();
 }
 
+const norm = (s) => s.toUpperCase().replace(/[^A-Z]/g, "").trim();
+
+function questionForItem(item) {
+  return item.who ? "Who am I?" : "What am I?";
+}
+
 function renderHome() {
   clear();
   const wrap = el("div", "screen screen--home");
   const header = el("div", "home-header");
   header.appendChild(el("h1", "title", "English Places"));
   header.appendChild(
-    el("p", "tagline", "Pick a place, explore, and spell the words!")
+    el(
+      "p",
+      "tagline",
+      "Go to a place, move near an object, and name it — say it or type it!"
+    )
   );
   wrap.appendChild(header);
 
@@ -65,77 +81,86 @@ function renderScene(locationId) {
   top.appendChild(el("h2", "scene-title", loc.title));
   wrap.appendChild(top);
 
-  const layer = el("div", "scene-layer");
-  for (let i = 0; i < 8; i++) {
-    const bub = el("div", "scene-bubble");
-    bub.style.left = `${8 + (i * 11) % 80}%`;
-    bub.style.animationDelay = `${i * 0.4}s`;
-    bub.textContent = loc.decor[i % loc.decor.length];
-    layer.appendChild(bub);
+  const hint = el("p", "scene-hint", "Move your pointer or finger near something.");
+  wrap.appendChild(hint);
+
+  const world = el("div", "scene-world");
+  const canvas = el("div", "scene-canvas");
+  world.setAttribute("role", "application");
+  world.setAttribute("aria-label", `${loc.title} scene. Move near objects to name them.`);
+  canvas.setAttribute("aria-hidden", "false");
+
+  const background = el("div", "scene-back");
+  for (const d of loc.decor) {
+    const s = el("span", "scene-back__deco", d);
+    background.appendChild(s);
   }
-  wrap.appendChild(layer);
+  canvas.appendChild(background);
 
-  const strip = el("div", "item-strip");
-  loc.items.forEach((item, index) => {
-    const b = el("button", "item-tile", item.icon);
-    b.type = "button";
-    b.title = "Learn this word";
-    b.addEventListener("click", () => renderSpell(loc, item, index));
-    strip.appendChild(b);
-  });
-  wrap.appendChild(strip);
-  app.appendChild(wrap);
-}
+  const objectEls = [];
+  for (const item of loc.items) {
+    const node = el("div", "scene-object");
+    node.setAttribute("data-word", item.word);
+    const inner = el("div", "scene-object__icon", item.icon);
+    if (item.size) inner.style.fontSize = `calc(2.4rem * ${item.size})`;
+    node.appendChild(inner);
+    node.style.left = `${item.x}%`;
+    node.style.top = `${item.y}%`;
+    canvas.appendChild(node);
+    objectEls.push({ item, el: node });
+  }
 
-function renderSpell(loc, item, itemIndex) {
-  clear();
-  const wrap = el("div", `screen screen--spell screen--${loc.theme}`);
+  const riddle = el("div", "riddle-panel is-hidden");
+  riddle.setAttribute("aria-live", "polite");
 
-  const top = el("div", "top-bar");
-  const back = el("button", "btn btn--ghost", "← Back");
-  back.type = "button";
-  back.addEventListener("click", () => renderScene(loc.id));
-  top.appendChild(back);
-  top.appendChild(el("h2", "scene-title", loc.title));
-  wrap.appendChild(top);
-
-  const center = el("div", "spell-center");
-  const show = el("div", "spell-show");
-  const big = el("div", "spell-icon pop-in", item.icon);
-  show.appendChild(big);
-  const label = el("p", "spell-hint", "Can you spell this word?");
-  show.appendChild(label);
-
+  const riddleQ = el("h3", "riddle-panel__q", "");
   const wordRow = el("div", "word-length");
-  for (const _ of item.word) {
-    wordRow.appendChild(el("span", "word-slot", ""));
-  }
-  show.appendChild(wordRow);
-
-  const form = el("form", "spell-form");
+  const form = el("form", "riddle-form");
   const input = el("input", "spell-input");
   input.setAttribute("autocapitalize", "characters");
   input.setAttribute("autocomplete", "off");
   input.setAttribute("spellcheck", "false");
-  input.setAttribute("maxlength", String(item.word.length));
-  input.setAttribute("aria-label", "Type the word");
-  input.placeholder = "Type here…";
-
-  const actions = el("div", "spell-actions");
-  const check = el("button", "btn btn--primary", "Check");
-  check.type = "submit";
-  const listen = el("button", "btn btn--soft", "Listen");
-  listen.type = "button";
-  listen.addEventListener("click", () => speak(item.word));
-
-  actions.appendChild(listen);
-  actions.appendChild(check);
-  form.appendChild(input);
-  form.appendChild(actions);
+  input.setAttribute("aria-label", "Type the name");
+  input.placeholder = "Type the word…";
 
   const msg = el("p", "spell-message", "");
+  const actions = el("div", "riddle-actions");
 
-  const nextItem = loc.items[itemIndex + 1];
+  const check = el("button", "btn btn--primary", "Check");
+  check.type = "submit";
+  const listen = el("button", "btn btn--soft", "Hear it");
+  listen.type = "button";
+  const mic = el("button", "btn btn--soft", "🎤 Say it");
+  mic.type = "button";
+  const micNote = el("p", "riddle-aux", "");
+  if (!getSpeechRecognition()) {
+    mic.disabled = true;
+    mic.classList.add("is-disabled");
+    micNote.textContent = "Saying the word needs a supported browser (e.g. Chrome, Edge, Safari on desktop). You can still type.";
+  }
+  actions.appendChild(mic);
+  actions.appendChild(listen);
+  actions.appendChild(check);
+
+  form.appendChild(input);
+  form.appendChild(actions);
+  riddle.appendChild(riddleQ);
+  riddle.appendChild(wordRow);
+  riddle.appendChild(form);
+  riddle.appendChild(micNote);
+  riddle.appendChild(msg);
+
+  let active = null;
+  let hideTimer = 0;
+  let activeRec = null;
+  const PROX_FUDGE = 0.5;
+
+  function setWordSlots(word) {
+    wordRow.replaceChildren();
+    for (const _ of word) {
+      wordRow.appendChild(el("span", "word-slot", ""));
+    }
+  }
 
   function updateSlots(typed) {
     const slots = wordRow.querySelectorAll(".word-slot");
@@ -144,9 +169,159 @@ function renderSpell(loc, item, itemIndex) {
     }
   }
 
+  function setActiveEntry(entry) {
+    if (activeRec) {
+      try {
+        activeRec.stop();
+      } catch (_) {}
+      activeRec = null;
+    }
+    if (!entry) {
+      active = null;
+      riddle.classList.add("is-hidden");
+      riddle.setAttribute("aria-hidden", "true");
+      for (const { el: o } of objectEls) o.classList.remove("scene-object--near");
+      return;
+    }
+    active = entry;
+    for (const { el: o, item } of objectEls) {
+      o.classList.toggle("scene-object--near", item.word === entry.item.word);
+    }
+    riddle.classList.remove("is-hidden");
+    riddle.setAttribute("aria-hidden", "false");
+    riddleQ.textContent = questionForItem(entry.item);
+    setWordSlots(entry.item.word);
+    input.value = "";
+    input.setAttribute("maxlength", String(entry.item.word.length));
+    updateSlots("");
+    msg.textContent = "";
+    msg.className = "spell-message";
+    speak(riddleQ.textContent);
+  }
+
+  function getNearEntry(clientX, clientY) {
+    let best = null;
+    let bestD = Infinity;
+    for (const entry of objectEls) {
+      const r = entry.el.getBoundingClientRect();
+      const cx = (r.left + r.right) / 2;
+      const cy = (r.top + r.bottom) / 2;
+      const halfW = ((r.width || 48) * (1 + PROX_FUDGE)) / 2 + 8;
+      const halfH = ((r.height || 48) * (1 + PROX_FUDGE)) / 2 + 8;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
+        const d = dx * dx + dy * dy;
+        if (d < bestD) {
+          bestD = d;
+          best = entry;
+        }
+      }
+    }
+    return best;
+  }
+
+  function onPointerAt(clientX, clientY) {
+    if (riddleOver) return;
+    const near = getNearEntry(clientX, clientY);
+    if (near) {
+      if (window.clearTimeout) {
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = 0;
+      }
+      if (!active || active.item.word !== near.item.word) {
+        setActiveEntry(near);
+      }
+    } else {
+      if (!riddleOver) {
+        if (window.clearTimeout) {
+          if (hideTimer) clearTimeout(hideTimer);
+          hideTimer = window.setTimeout(() => {
+            if (!riddleOver) setActiveEntry(null);
+          }, 500);
+        }
+      }
+    }
+  }
+
+  let riddleOver = false;
+  riddle.addEventListener("pointerenter", () => {
+    riddleOver = true;
+  });
+  riddle.addEventListener("pointerleave", (e) => {
+    riddleOver = false;
+    onPointerAt(e.clientX, e.clientY);
+  });
+
+  function handleMove(e) {
+    const t = e.touches ? e.touches[0] : e;
+    onPointerAt(t.clientX, t.clientY);
+  }
+  canvas.addEventListener("pointermove", handleMove, { passive: true });
+  canvas.addEventListener("pointerdown", handleMove, { passive: true });
+  canvas.addEventListener("touchmove", handleMove, { passive: true });
+
+  world.appendChild(canvas);
+  world.appendChild(riddle);
+  wrap.appendChild(world);
+  app.appendChild(wrap);
+
+  listen.addEventListener("click", () => {
+    if (active) speak(active.item.word);
+  });
+
+  if (!mic.disabled) {
+    mic.addEventListener("click", () => {
+      if (!active) return;
+      if (activeRec) {
+        try {
+          activeRec.stop();
+        } catch (_) {}
+        return;
+      }
+      const R = getSpeechRecognition();
+      if (!R) return;
+      R.lang = "en-US";
+      R.interimResults = false;
+      R.maxAlternatives = 3;
+      R.onerror = () => {
+        activeRec = null;
+        msg.textContent = "Could not hear. Try again or use the box.";
+        msg.className = "spell-message spell-message--info";
+      };
+      R.onend = () => {
+        activeRec = null;
+        mic.textContent = "🎤 Say it";
+      };
+      R.onresult = (ev) => {
+        if (!active) return;
+        const res = ev.results[0];
+        for (let i = 0; i < res.length; i++) {
+          const g = norm(res[i].transcript);
+          if (g) {
+            input.value = g.slice(0, active.item.word.length);
+            updateSlots(input.value);
+            break;
+          }
+        }
+      };
+      try {
+        R.start();
+        activeRec = R;
+        mic.textContent = "⏹ Stop";
+        msg.textContent = "Listening…";
+        msg.className = "spell-message spell-message--info";
+      } catch (_) {
+        activeRec = null;
+      }
+    });
+  }
+
   input.addEventListener("input", () => {
+    if (!active) return;
+    const max = active.item.word.length;
     const v = input.value.toUpperCase().replace(/[^A-Z]/g, "");
-    input.value = v.slice(0, item.word.length);
+    input.value = v.slice(0, max);
     updateSlots(input.value);
     msg.textContent = "";
     msg.className = "spell-message";
@@ -154,51 +329,26 @@ function renderSpell(loc, item, itemIndex) {
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!active) return;
+    const target = active.item.word;
     const guess = input.value.toUpperCase().trim();
-    if (guess.length !== item.word.length) {
-      msg.textContent = `Use ${item.word.length} letters.`;
+    if (guess.length !== target.length) {
+      msg.textContent = `The word has ${target.length} letters.`;
       msg.className = "spell-message spell-message--info";
       return;
     }
-    if (guess === item.word) {
-      msg.textContent = "Great job! You spelled it correctly!";
+    if (guess === target) {
+      msg.textContent = `Yes! It is ${target}.`;
       msg.className = "spell-message spell-message--ok";
-      big.classList.add("celebrate");
-      speak("Great! " + item.word);
-      if (nextItem) {
-        const nbtn = el("button", "btn btn--primary spell-next", "Next word");
-        nbtn.type = "button";
-        nbtn.addEventListener("click", () => {
-          big.classList.remove("celebrate");
-          renderSpell(loc, nextItem, itemIndex + 1);
-        });
-        if (!form.querySelector(".spell-next")) {
-          form.appendChild(nbtn);
-        }
-      } else {
-        const dbtn = el("button", "btn btn--primary spell-next", "Another place");
-        dbtn.type = "button";
-        dbtn.addEventListener("click", () => {
-          big.classList.remove("celebrate");
-          renderHome();
-        });
-        if (!form.querySelector(".spell-next")) {
-          form.appendChild(dbtn);
-        }
+      for (const { el: o, item } of objectEls) {
+        if (item.word === target) o.classList.add("scene-object--solved");
       }
+      speak(`Yes! ${target}.`);
     } else {
-      msg.textContent = "Not quite—try again or press Listen.";
+      msg.textContent = "Not quite. Try “Hear it” or “Say it”, or type again.";
       msg.className = "spell-message spell-message--err";
     }
   });
-
-  center.appendChild(show);
-  center.appendChild(form);
-  center.appendChild(msg);
-  wrap.appendChild(center);
-  app.appendChild(wrap);
-  input.focus();
-  setTimeout(() => speak(item.word), 300);
 }
 
 renderHome();
