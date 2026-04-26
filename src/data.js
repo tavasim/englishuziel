@@ -1,7 +1,8 @@
 /**
  * word: target spelling. icon: emoji. who: true -> "Who am I?", false -> "What am I?"
- * x, y: position in the scene (percent, top-left anchor center with translate -50% -50%)
- * size: emoji size scale (1 = default)
+ * size: icon scale (1 = default)
+ * Item order = left-to-right in two rows (top row first, then bottom). Positions are computed in main.js.
+ * Optional on a location: rowYTop, rowYBottom (percent) to tune the two rows.
  */
 export const locations = {
   zoo: {
@@ -11,12 +12,62 @@ export const locations = {
     theme: "zoo",
     decor: ["🌳", "🦩", "🌿", "☀️"],
     items: [
-      { word: "LION", icon: "🦁", who: true, x: 12, y: 72, size: 1.1 },
-      { word: "ELEPHANT", icon: "🐘", who: true, x: 30, y: 68, size: 1.2 },
-      { word: "GIRAFFE", icon: "🦒", who: true, x: 48, y: 50, size: 1.35 },
-      { word: "MONKEY", icon: "🐵", who: true, x: 62, y: 32, size: 1.05 },
-      { word: "PENGUIN", icon: "🐧", who: true, x: 78, y: 76, size: 1.0 },
-      { word: "ZEBRA", icon: "🦓", who: true, x: 90, y: 65, size: 1.15 },
+      {
+        word: "LION",
+        who: true,
+        size: 1.1,
+        iconSrc: "/images/lion.png",
+        icon: "🦁",
+      },
+      {
+        word: "ELEPHANT",
+        who: true,
+        size: 1.2,
+        iconSrc: "/images/elephant.png",
+        icon: "🐘",
+      },
+      {
+        word: "GIRAFFE",
+        who: true,
+        size: 1.35,
+        iconSrc: "/images/giraffe.png",
+        icon: "🦒",
+      },
+      {
+        word: "PANDA",
+        who: true,
+        size: 1.05,
+        iconSrc: "/images/panda.png",
+        icon: "🐼",
+      },
+      {
+        word: "MONKEY",
+        who: true,
+        size: 1.05,
+        iconSrc: "/images/monkey.png",
+        icon: "🐵",
+      },
+      {
+        word: "PENGUIN",
+        who: true,
+        size: 1.0,
+        iconSrc: "/images/penguin.png",
+        icon: "🐧",
+      },
+      {
+        word: "ZEBRA",
+        who: true,
+        size: 1.15,
+        iconSrc: "/images/zebra.png",
+        icon: "🦓",
+      },
+      {
+        word: "FLAMINGO",
+        who: true,
+        size: 1.0,
+        iconSrc: "/images/flamingo.png",
+        icon: "🦩",
+      },
     ],
   },
   classroom: {
@@ -26,12 +77,38 @@ export const locations = {
     theme: "classroom",
     decor: ["📚", "✏️", "🧮", "🍎"],
     items: [
-      { word: "BOARD", icon: "🖼️", who: false, x: 50, y: 20, size: 1.4 },
-      { word: "CLOCK", icon: "🕐", who: false, x: 82, y: 16, size: 0.95 },
-      { word: "CHAIR", icon: "🪑", who: false, x: 28, y: 70, size: 1.1 },
-      { word: "TABLE", icon: "🍽️", who: false, x: 52, y: 75, size: 1.25 },
-      { word: "PENCIL", icon: "✏️", who: false, x: 18, y: 64, size: 0.9 },
-      { word: "BOOK", icon: "📖", who: false, x: 72, y: 72, size: 1.0 },
+      {
+        word: "BOARD",
+        who: false,
+        size: 1.4,
+        iconSrc: "/images/classroom-board.png",
+        icon: "🖼️",
+      },
+      { word: "CLOCK", icon: "🕐", who: false, size: 0.95 },
+      { word: "CHAIR", icon: "🪑", who: false, size: 1.1 },
+      {
+        word: "TABLE",
+        who: false,
+        size: 1.25,
+        iconSrc: "/images/classroom-table.png",
+        icon: "🍽️",
+      },
+      { word: "PENCIL", icon: "✏️", who: false, size: 0.9 },
+      {
+        word: "RULER",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/classroom-ruler.png",
+        icon: "📏",
+      },
+      { word: "BOOK", icon: "📖", who: false, size: 1.0 },
+      {
+        word: "TEACHER",
+        who: true,
+        size: 1.1,
+        iconSrc: "/images/classroom-teacher.png",
+        icon: "🧑‍🏫",
+      },
     ],
   },
   playground: {
@@ -41,12 +118,44 @@ export const locations = {
     theme: "playground",
     decor: ["🌤️", "🪁", "🧢", "🌈"],
     items: [
-      { word: "TREE", icon: "🌳", who: false, x: 10, y: 40, size: 1.3 },
-      { word: "SWING", icon: "🎡", who: false, x: 28, y: 50, size: 1.15 },
-      { word: "SLIDE", icon: "🛝", who: false, x: 48, y: 55, size: 1.2 },
-      { word: "SEESAW", icon: "⚖️", who: false, x: 70, y: 72, size: 1.0 },
-      { word: "SANDBOX", icon: "🏖️", who: false, x: 88, y: 68, size: 1.1 },
-      { word: "BALL", icon: "⚽", who: false, x: 40, y: 82, size: 0.95 },
+      { word: "TREE", icon: "🌳", who: false, size: 1.3 },
+      {
+        word: "SWING",
+        who: false,
+        size: 1.15,
+        iconSrc: "/images/playground-swing.png",
+        icon: "🎡",
+      },
+      { word: "SLIDE", icon: "🛝", who: false, size: 1.2 },
+      {
+        word: "SEESAW",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/playground-seesaw.png",
+        icon: "⚖️",
+      },
+      {
+        word: "SANDBOX",
+        who: false,
+        size: 1.1,
+        iconSrc: "/images/playground-sandbox.png",
+        icon: "🏖️",
+      },
+      {
+        word: "BUCKET",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/playground-bucket.png",
+        icon: "🪣",
+      },
+      { word: "BALL", icon: "⚽", who: false, size: 0.95 },
+      {
+        word: "TRAMPOLINE",
+        who: false,
+        size: 1.0,
+        iconSrc: "/images/playground-trampoline.png",
+        icon: "🤸",
+      },
     ],
   },
 };

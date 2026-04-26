@@ -114,9 +114,9 @@ body {
 .location-card__miniscene {
   display: flex;
   gap: 0.4rem;
-  font-size: 1.5rem;
+  font-size: 3.375rem;
   margin-bottom: 0.6rem;
-  min-height: 2rem;
+  min-height: 4.5rem;
 }
 
 .location-card__title {
@@ -278,7 +278,7 @@ body {
   z-index: 0;
   pointer-events: none;
   opacity: 0.4;
-  font-size: 1.6rem;
+  font-size: 3.6rem;
 }
 
 .scene-back__deco {
@@ -295,13 +295,13 @@ body {
   top: 4%;
   right: 8%;
   animation-delay: 2.5s;
-  font-size: 1.3rem;
+  font-size: 2.925rem;
 }
 .scene-back__deco:nth-child(3) {
   bottom: 20%;
   left: 10%;
   animation-delay: 5s;
-  font-size: 1.2rem;
+  font-size: 2.7rem;
 }
 .scene-back__deco:nth-child(4) {
   bottom: 12%;
@@ -547,9 +547,18 @@ body {
 
 .scene-object__icon {
   line-height: 1;
-  font-size: 2.4rem;
+  font-size: 5.4rem;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2));
   transition: transform 0.2s ease;
+}
+
+.scene-object__img {
+  display: block;
+  height: 5.4rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2));
 }
 
 .scene-object--near .scene-object__icon {
@@ -559,6 +568,34 @@ body {
 
 .scene-object--near {
   z-index: 3;
+}
+
+/* Say: Say it / Hear it / Check under each object */
+.mode-say .scene-object__actions {
+  pointer-events: auto;
+  margin-top: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 11.5rem;
+}
+.mode-say .scene-object__action {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.22rem 0.4rem;
+  line-height: 1.15;
+  box-shadow: 0 2px 0 rgba(40, 60, 100, 0.35);
+  white-space: nowrap;
+}
+.mode-say .scene-object__say-mic {
+  box-shadow: 0 2px 0 #3d5a8a;
+}
+.mode-say .scene-object__check {
+  box-shadow: 0 2px 0 #1a4a9e;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
 }
 
 .scene-object--solved .scene-object__icon {
