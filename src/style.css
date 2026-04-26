@@ -7,6 +7,8 @@
   --class-2: #9ab8ff;
   --play-1: #e85a7b;
   --play-2: #ffb3c5;
+  --clinic-1: #3a7a9c;
+  --clinic-2: #8ec8de;
   --ok: #1f9d55;
   --warn: #c26b00;
   --bad: #d12b45;
@@ -129,6 +131,10 @@ body {
 
 .location-card--playground {
   background: linear-gradient(135deg, var(--play-1), var(--play-2));
+}
+
+.location-card--clinic {
+  background: linear-gradient(135deg, var(--clinic-1), var(--clinic-2));
 }
 
 .location-card__miniscene {
@@ -313,6 +319,9 @@ body {
 }
 .scene--playground .scene-canvas {
   background: linear-gradient(180deg, #7ec8e3 0%, #c5f0b0 50%, #9b7653 100%);
+}
+.scene--clinic .scene-canvas {
+  background: linear-gradient(180deg, #b8d9ea 0%, #e8f4f8 50%, #cfe8f0 100%);
 }
 
 .scene-back {
