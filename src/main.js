@@ -4,12 +4,63 @@ const app = document.getElementById("app");
 
 const MODE = { match: "match", spell: "spell", say: "say" };
 
+let _narratorVoice;
+let _narratorVoicePicked = false;
+
+/** Prefer a warm US English voice that is usually female. Rechecked when `voices` updates. */
+function getNarratorVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  if (_narratorVoicePicked) return _narratorVoice ?? null;
+  const list = window.speechSynthesis.getVoices();
+  if (!list.length) return null;
+  const sName = (v) => ((v.name || "") + " " + (v.voiceURI || "")).toLowerCase();
+  const isLikelyMale = (v) =>
+    /( male| daniel| david| fred| aaron| mark| thom| arthur| james| brian| gary| albert| junior| zarvox|google uk english male)/i.test(
+      sName(v)
+    );
+  const isLikelyFemale = (v) =>
+    /(samantha|karen|victoria|zira|fiona|serena|hazel|jenny|joanna|susan|martha|female|zoe|lisa|nancy|heather|hannah|sara|aria|kate|amy|linda|moira|shelley|tessa|fable)/i.test(
+      sName(v)
+    );
+  const en = list.filter((v) => (v.lang || "").toLowerCase().startsWith("en"));
+  for (const v of en) {
+    if (isLikelyMale(v)) continue;
+    if (isLikelyFemale(v)) {
+      _narratorVoice = v;
+      _narratorVoicePicked = true;
+      return v;
+    }
+  }
+  for (const v of en) {
+    if (!isLikelyMale(v)) {
+      _narratorVoice = v;
+      _narratorVoicePicked = true;
+      return v;
+    }
+  }
+  _narratorVoice = en[0] || list[0] || null;
+  _narratorVoicePicked = true;
+  return _narratorVoice;
+}
+
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  const refreshNarratorVoice = () => {
+    _narratorVoice = undefined;
+    _narratorVoicePicked = false;
+  };
+  window.speechSynthesis.addEventListener("voiceschanged", refreshNarratorVoice);
+  window.speechSynthesis.getVoices();
+}
+
 function speak(text) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US";
-  u.rate = 0.9;
+  u.rate = 0.88;
+  u.pitch = 1.06;
+  const voice = getNarratorVoice();
+  if (voice) u.voice = voice;
   window.speechSynthesis.speak(u);
 }
 
@@ -27,8 +78,13 @@ function getClapContext() {
   return clapAudioContext;
 }
 
-/** Hand-clap style feedback (short noise bursts), for every correct answer. */
-function playClap() {
+/** Set `public/sounds/handclap.mp3` to your hand-clap track (e.g. first 5+ sec from a clip). */
+const HANDCLAP_SRC = "/sounds/handclap.mp3";
+
+/**
+ * Procedural hand-clap fallback if the sound file is missing or cannot play.
+ */
+function playClapSynth() {
   const ctx = getClapContext();
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
@@ -67,6 +123,49 @@ function playClap() {
   }
 }
 
+/**
+ * Plays the start of `handclap.mp3` for up to `durationSec` (3 = normal, 5 = all done).
+ * Use one MP3 of at least 5s (same file for both; we stop early at 3s when needed).
+ * Falls back to the synth if the file is missing or `play()` fails.
+ */
+function playClap(durationSec = 3) {
+  if (typeof durationSec !== "number" || durationSec < 0.1) durationSec = 3;
+  const a = new Audio(HANDCLAP_SRC);
+  let done = false;
+  let tStop = 0;
+  const finish = (useSynth) => {
+    if (done) return;
+    done = true;
+    if (tStop) window.clearTimeout(tStop);
+    try {
+      a.pause();
+    } catch (_) {}
+    if (useSynth) playClapSynth();
+  };
+  a.addEventListener("ended", () => finish(false));
+  a.addEventListener("error", () => finish(true), { once: true });
+  a.volume = 0.88;
+  a.currentTime = 0;
+  tStop = window.setTimeout(
+    () => {
+      if (!done) {
+        try {
+          a.pause();
+        } catch (_) {}
+        done = true;
+      }
+    },
+    durationSec * 1000 + 15
+  );
+  a.play().catch(() => {
+    if (tStop) window.clearTimeout(tStop);
+    if (!done) {
+      done = true;
+      playClapSynth();
+    }
+  });
+}
+
 function el(tag, className, text) {
   const n = document.createElement(tag);
   if (className) n.className = className;
@@ -91,6 +190,26 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+/** Even horizontal spacing for `count` slots in one row (slotIndex 0..count-1). */
+function rowXPercent(slotIndex, count) {
+  if (count <= 0) return 50;
+  return (100 / (count + 1)) * (slotIndex + 1);
+}
+
+/**
+ * Two rows: first ceil(n/2) items on the top row, the rest on the bottom.
+ * Returns { x, y } in percent for the scene canvas.
+ */
+function positionInTwoRows(index, total, yTop, yBottom) {
+  const topCount = Math.ceil(total / 2);
+  if (index < topCount) {
+    return { x: rowXPercent(index, topCount), y: yTop };
+  }
+  const bottomCount = total - topCount;
+  const j = index - topCount;
+  return { x: rowXPercent(j, bottomCount), y: yBottom };
 }
 
 function topBar(loc, backLabel, onBack) {
@@ -127,27 +246,53 @@ function buildLocationScene(loc, { screenClass, hintText, worldClass }) {
 
   const canvas = el("div", "scene-canvas");
   const background = el("div", "scene-back");
-  for (const d of loc.decor) {
+  for (const d of loc.decor || []) {
     background.appendChild(el("span", "scene-back__deco", d));
   }
   canvas.appendChild(background);
 
   const objectEls = [];
-  for (const item of loc.items) {
+  const items = loc.items;
+  const total = items.length;
+  const yTop = loc.rowYTop != null ? loc.rowYTop : 30;
+  const yBottom = loc.rowYBottom != null ? loc.rowYBottom : 72;
+  const topCount = Math.ceil(total / 2);
+  items.forEach((item, index) => {
+    const row = index < topCount ? 0 : 1;
     const node = el("div", "scene-object");
     node.setAttribute("data-word", item.word);
-    const inner = el("div", "scene-object__icon", item.icon);
-    if (item.size) inner.style.fontSize = `calc(2.4rem * ${item.size})`;
+    const inner = el("div", "scene-object__icon");
+    if (item.iconSrc) {
+      const img = document.createElement("img");
+      img.className = "scene-object__img";
+      img.src = item.iconSrc;
+      img.alt = item.word;
+      img.setAttribute("draggable", "false");
+      if (item.size) {
+        img.style.height = `calc(5.4rem * ${item.size})`;
+        img.style.width = "auto";
+      }
+      img.addEventListener("error", () => {
+        img.remove();
+        if (item.icon) inner.textContent = item.icon;
+        if (item.size) inner.style.fontSize = `calc(5.4rem * ${item.size})`;
+      });
+      inner.appendChild(img);
+    } else {
+      if (item.icon != null) inner.textContent = item.icon;
+      if (item.size) inner.style.fontSize = `calc(5.4rem * ${item.size})`;
+    }
     node.appendChild(inner);
     const nameBox = el("div", "object-name-box");
     const tag = el("span", "object-name-tag", "");
     nameBox.appendChild(tag);
     node.appendChild(nameBox);
-    node.style.left = `${item.x}%`;
-    node.style.top = `${item.y}%`;
+    const { x, y } = positionInTwoRows(index, total, yTop, yBottom);
+    node.style.left = `${x}%`;
+    node.style.top = `${y}%`;
     canvas.appendChild(node);
-    objectEls.push({ item, el: node, tag });
-  }
+    objectEls.push({ item, el: node, tag, row });
+  });
 
   world.appendChild(canvas);
   wrap.appendChild(world);
@@ -169,7 +314,7 @@ function renderHome() {
     const card = el("button", `location-card location-card--${loc.theme}`);
     card.type = "button";
     const mini = el("div", "location-card__miniscene");
-    for (const d of loc.decor) {
+    for (const d of loc.decor || []) {
       mini.appendChild(el("span", "float-emoji", d));
     }
     card.appendChild(mini);
@@ -256,7 +401,7 @@ function renderMatchGame(loc) {
   const again = el("button", "btn btn--soft", "Back to games");
   again.type = "button";
   again.addEventListener("click", () => renderGameModePicker(loc.id));
-  doneRow.appendChild(el("span", "match-done__text", "All matched! "));
+  doneRow.appendChild(el("span", "match-done__text", "You matched them all! "));
   doneRow.appendChild(again);
   world.appendChild(bank);
   world.appendChild(msg);
@@ -266,7 +411,7 @@ function renderMatchGame(loc) {
   function onAllMatched() {
     msg.textContent = "";
     doneRow.classList.remove("is-hidden");
-    speak("Great! You matched them all.");
+    speak("Wonderful! You matched every one! That was fantastic. I'm so proud of you.");
   }
 
   for (const item of shuffled) {
@@ -342,8 +487,9 @@ function renderMatchGame(loc) {
                 }
               }
               chip.classList.add("is-hidden");
-              playClap();
-              if (state.matched.size >= loc.items.length) onAllMatched();
+              const allDone = state.matched.size >= loc.items.length;
+              playClap(allDone ? 5 : 3);
+              if (allDone) onAllMatched();
             } else {
               for (const { el, item: it } of objectEls) {
                 if (hit && it.word === hit.word) {
@@ -396,8 +542,9 @@ function renderMatchGame(loc) {
       for (const c of bank.querySelectorAll(".match-chip")) {
         if (c.getAttribute("data-word") === w) c.classList.add("is-hidden");
       }
-      playClap();
-      if (state.matched.size >= loc.items.length) onAllMatched();
+      const allDone = state.matched.size >= loc.items.length;
+      playClap(allDone ? 5 : 3);
+      if (allDone) onAllMatched();
     });
   }
 }
@@ -474,7 +621,8 @@ function renderSpellGame(loc) {
   function goNext() {
     continueRevealed.classList.add("is-hidden");
     if (index >= loc.items.length - 1) {
-      msg.textContent = "You finished all words! Amazing!";
+      msg.textContent =
+        "You spelled all the words! You worked so hard — I'm really proud of you.";
       msg.className = "spell-message spell-message--ok";
       check.disabled = true;
       input.disabled = true;
@@ -498,7 +646,7 @@ function renderSpellGame(loc) {
     msg.textContent = `The word is: ${t}. Press Continue for the next word.`;
     msg.className = "spell-message spell-message--info";
     continueRevealed.classList.remove("is-hidden");
-    speak("The word is " + t);
+    speak(`The word is ${t}. That's okay — you'll get the next one. I believe in you.`);
   }
 
   function applyRound() {
@@ -561,14 +709,23 @@ function renderSpellGame(loc) {
       return;
     }
     if (guess === t) {
-      msg.textContent = `Yes! ${t}`;
+      msg.textContent = `That’s it — ${t}. Perfect spelling!`;
       msg.className = "spell-message spell-message--ok";
-      playClap();
+      const isLast = index >= loc.items.length - 1;
+      playClap(isLast ? 5 : 3);
       for (const { el, item } of objectEls) {
         if (item.word === t) el.classList.add("scene-object--solved");
       }
-      speak("Yes! " + t);
-      window.setTimeout(() => goNext(), 900);
+      if (isLast) {
+        speak(
+          `You did it! The word is ${t}. You spelled every single one! What amazing work. I'm so proud of you!`
+        );
+      } else {
+        speak(
+          `That’s it — ${t}. You spelled it beautifully! Keep going — you’re doing great!`
+        );
+      }
+      window.setTimeout(() => goNext(), isLast ? 5200 : 900);
     } else {
       wrongCount += 1;
       if (wrongCount >= 3) {
@@ -589,7 +746,8 @@ function renderSayGame(loc) {
   clear();
   const { wrap, world, canvas, objectEls } = buildLocationScene(loc, {
     screenClass: "mode-say",
-    hintText: "Move your pointer or finger near something to answer.",
+    hintText:
+      "Use Say it, Hear it, and Check under each picture, or point near a picture to open the word box.",
     worldClass: "",
   });
 
@@ -605,25 +763,12 @@ function renderSayGame(loc) {
   input.setAttribute("aria-label", "Type the name");
   input.placeholder = "Type the word…";
   const msg = el("p", "spell-message", "");
-  const actions = el("div", "riddle-actions");
-  const check = el("button", "btn btn--primary", "Check");
-  check.type = "submit";
-  const listen = el("button", "btn btn--soft", "Hear it");
-  listen.type = "button";
-  const mic = el("button", "btn btn--soft", "🎤 Say it");
-  mic.type = "button";
   const micNote = el("p", "riddle-aux", "");
   if (!getSpeechRecognition()) {
-    mic.disabled = true;
-    mic.classList.add("is-disabled");
     micNote.textContent =
       "Saying the word needs a supported browser. You can still type.";
   }
-  actions.appendChild(mic);
-  actions.appendChild(listen);
-  actions.appendChild(check);
   form.appendChild(input);
-  form.appendChild(actions);
   riddle.appendChild(riddleQ);
   riddle.appendChild(wordRow);
   riddle.appendChild(form);
@@ -633,7 +778,8 @@ function renderSayGame(loc) {
   let active = null;
   let hideTimer = 0;
   let activeRec = null;
-  const PROX_FUDGE = 0.5;
+  /** Tight hit area: icon only; row lock avoids grabbing the row below when moving toward the answer panel. */
+  const PROX_FUDGE = 0.35;
 
   function setWordSlots(word) {
     wordRow.replaceChildren();
@@ -648,6 +794,12 @@ function renderSayGame(loc) {
     }
   }
 
+  function resetAllSayMics() {
+    for (const e of objectEls) {
+      if (e.sayMic) e.sayMic.textContent = "🎤 Say it";
+    }
+  }
+
   function setActiveEntry(entry) {
     if (activeRec) {
       try {
@@ -657,6 +809,7 @@ function renderSayGame(loc) {
     }
     if (!entry) {
       active = null;
+      resetAllSayMics();
       riddle.classList.add("is-hidden");
       riddle.setAttribute("aria-hidden", "true");
       for (const { el: o } of objectEls) o.classList.remove("scene-object--near");
@@ -675,29 +828,97 @@ function renderSayGame(loc) {
     updateSlots("");
     msg.textContent = "";
     msg.className = "spell-message";
+    resetAllSayMics();
     speak(riddleQ.textContent);
   }
 
   function getNearEntry(clientX, clientY) {
+    const yT = loc.rowYTop != null ? loc.rowYTop : 30;
+    const yB = loc.rowYBottom != null ? loc.rowYBottom : 72;
+    const cr = canvas.getBoundingClientRect();
+    if (cr.height < 1) return null;
+    const yTopPx = cr.top + (cr.height * yT) / 100;
+    const yBottomPx = cr.top + (cr.height * yB) / 100;
+    const dTop = Math.abs(clientY - yTopPx);
+    const dBottom = Math.abs(clientY - yBottomPx);
+    const preferRow = dTop <= dBottom ? 0 : 1;
+
     let best = null;
     let bestD = Infinity;
     for (const entry of objectEls) {
-      const r = entry.el.getBoundingClientRect();
-      const cx = (r.left + r.right) / 2;
-      const cy = (r.top + r.bottom) / 2;
-      const halfW = ((r.width || 48) * (1 + PROX_FUDGE)) / 2 + 8;
-      const halfH = ((r.height || 48) * (1 + PROX_FUDGE)) / 2 + 8;
-      const dx = clientX - cx;
-      const dy = clientY - cy;
-      if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
-        const d = dx * dx + dy * dy;
-        if (d < bestD) {
-          bestD = d;
-          best = entry;
+      if (entry.row !== preferRow) continue;
+      const parts = [
+        entry.el.querySelector(".scene-object__icon"),
+        entry.el.querySelector(".scene-object__actions"),
+      ].filter(Boolean);
+      for (const hitEl of parts) {
+        const r = hitEl.getBoundingClientRect();
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        const halfW = ((r.width || 48) * (1 + PROX_FUDGE)) / 2 + 8;
+        const halfH = ((r.height || 48) * (1 + PROX_FUDGE)) / 2 + 8;
+        const dx = clientX - cx;
+        const dy = clientY - cy;
+        if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
+          const d = dx * dx + dy * dy;
+          if (d < bestD) {
+            bestD = d;
+            best = entry;
+          }
         }
       }
     }
     return best;
+  }
+
+  function startMic() {
+    if (!active) return;
+    const micBtn = active.sayMic;
+    if (!micBtn || micBtn.disabled) return;
+    if (activeRec) {
+      try {
+        activeRec.stop();
+      } catch (_) {}
+      return;
+    }
+    const R = getSpeechRecognition();
+    if (!R) return;
+    R.lang = "en-US";
+    R.interimResults = false;
+    R.maxAlternatives = 3;
+    R.onerror = () => {
+      activeRec = null;
+      resetAllSayMics();
+      msg.textContent = "Could not hear. Try again or use the box.";
+      msg.className = "spell-message spell-message--info";
+    };
+    R.onend = () => {
+      activeRec = null;
+      resetAllSayMics();
+    };
+    R.onresult = (ev) => {
+      if (!active) return;
+      const res = ev.results[0];
+      for (let i = 0; i < res.length; i++) {
+        const g = norm(res[i].transcript);
+        if (g) {
+          input.value = g.slice(0, active.item.word.length);
+          updateSlots(input.value);
+          break;
+        }
+      }
+    };
+    try {
+      R.start();
+      activeRec = R;
+      resetAllSayMics();
+      micBtn.textContent = "⏹ Stop";
+      msg.textContent = "Listening…";
+      msg.className = "spell-message spell-message--info";
+    } catch (_) {
+      activeRec = null;
+      resetAllSayMics();
+    }
   }
 
   let riddleOver = false;
@@ -737,61 +958,89 @@ function renderSayGame(loc) {
     onPointerAt(t.clientX, t.clientY);
   }
 
+  function runCheckForEntry(entry) {
+    if (!active || active.item.word !== entry.item.word) {
+      setActiveEntry(entry);
+    }
+    const target = entry.item.word;
+    const guess = input.value.toUpperCase().trim();
+    if (guess.length !== target.length) {
+      msg.textContent = `The word has ${target.length} letters.`;
+      msg.className = "spell-message spell-message--info";
+      return;
+    }
+    if (guess === target) {
+      const allSolved = (() => {
+        for (const { el: o, item } of objectEls) {
+          if (item.word === target) o.classList.add("scene-object--solved");
+        }
+        return objectEls.every(({ el: oel }) =>
+          oel.classList.contains("scene-object--solved")
+        );
+      })();
+      msg.textContent = allSolved
+        ? `You got it — ${target}. You did every single one!`
+        : `That’s it — it’s ${target}. Well done!`;
+      msg.className = "spell-message spell-message--ok";
+      playClap(allSolved ? 5 : 3);
+      speak(
+        allSolved
+          ? `You got it! It is ${target}. You finished them all! I'm so happy for you — wonderful job!`
+          : `That’s it! It is ${target}. You said it so well! I'm cheering for you.`
+      );
+    } else {
+      msg.textContent =
+        "Not quite. Try “Hear it” or “Say it” under the same picture, or type again.";
+      msg.className = "spell-message spell-message--err";
+    }
+  }
+
+  for (const entry of objectEls) {
+    const row = el("div", "scene-object__actions");
+    const micBtn = el("button", "btn btn--soft scene-object__action scene-object__say-mic", "🎤 Say it");
+    micBtn.type = "button";
+    if (!getSpeechRecognition()) {
+      micBtn.disabled = true;
+      micBtn.classList.add("is-disabled");
+    }
+    const hearBtn = el("button", "btn btn--soft scene-object__action scene-object__hear", "Hear it");
+    hearBtn.type = "button";
+    const checkBtn = el("button", "btn btn--primary scene-object__action scene-object__check", "Check");
+    checkBtn.type = "button";
+    entry.sayMic = micBtn;
+    row.appendChild(micBtn);
+    row.appendChild(hearBtn);
+    row.appendChild(checkBtn);
+    entry.el.appendChild(row);
+    micBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!active || active.item.word !== entry.item.word) {
+        setActiveEntry(entry);
+      }
+      startMic();
+    });
+    hearBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!active || active.item.word !== entry.item.word) {
+        setActiveEntry(entry);
+      }
+      speak(entry.item.word);
+    });
+    checkBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      runCheckForEntry(entry);
+    });
+  }
+
   world.appendChild(riddle);
   canvas.addEventListener("pointermove", handleMove, { passive: true });
   canvas.addEventListener("pointerdown", handleMove, { passive: true });
   canvas.addEventListener("touchmove", handleMove, { passive: true });
   app.appendChild(wrap);
 
-  listen.addEventListener("click", () => {
-    if (active) speak(active.item.word);
-  });
-  if (!mic.disabled) {
-    mic.addEventListener("click", () => {
-      if (!active) return;
-      if (activeRec) {
-        try {
-          activeRec.stop();
-        } catch (_) {}
-        return;
-      }
-      const R = getSpeechRecognition();
-      if (!R) return;
-      R.lang = "en-US";
-      R.interimResults = false;
-      R.maxAlternatives = 3;
-      R.onerror = () => {
-        activeRec = null;
-        msg.textContent = "Could not hear. Try again or use the box.";
-        msg.className = "spell-message spell-message--info";
-      };
-      R.onend = () => {
-        activeRec = null;
-        mic.textContent = "🎤 Say it";
-      };
-      R.onresult = (ev) => {
-        if (!active) return;
-        const res = ev.results[0];
-        for (let i = 0; i < res.length; i++) {
-          const g = norm(res[i].transcript);
-          if (g) {
-            input.value = g.slice(0, active.item.word.length);
-            updateSlots(input.value);
-            break;
-          }
-        }
-      };
-      try {
-        R.start();
-        activeRec = R;
-        mic.textContent = "⏹ Stop";
-        msg.textContent = "Listening…";
-        msg.className = "spell-message spell-message--info";
-      } catch (_) {
-        activeRec = null;
-      }
-    });
-  }
   input.addEventListener("input", () => {
     if (!active) return;
     const max = active.item.word.length;
@@ -804,25 +1053,7 @@ function renderSayGame(loc) {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!active) return;
-    const target = active.item.word;
-    const guess = input.value.toUpperCase().trim();
-    if (guess.length !== target.length) {
-      msg.textContent = `The word has ${target.length} letters.`;
-      msg.className = "spell-message spell-message--info";
-      return;
-    }
-    if (guess === target) {
-      msg.textContent = `Yes! It is ${target}.`;
-      msg.className = "spell-message spell-message--ok";
-      playClap();
-      for (const { el: o, item } of objectEls) {
-        if (item.word === target) o.classList.add("scene-object--solved");
-      }
-      speak(`Yes! ${target}.`);
-    } else {
-      msg.textContent = "Not quite. Try “Hear it” or “Say it”, or type again.";
-      msg.className = "spell-message spell-message--err";
-    }
+    runCheckForEntry(active);
   });
 }
 
