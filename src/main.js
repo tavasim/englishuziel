@@ -7,7 +7,11 @@ const MODE = { match: "match", spell: "spell", say: "say" };
 let _narratorVoice;
 let _narratorVoicePicked = false;
 
-/** Prefer a warm US English voice that is usually female. Rechecked when `voices` updates. */
+/**
+ * Picks the least “robotic” en-US/English voice available.
+ * Neural / premium / Wavenet-style voices score highest; SAPI/robot-style names are avoided.
+ * Quality still depends on OS and browser (Edge/Chrome on recent Windows has the best free options).
+ */
 function getNarratorVoice() {
   if (!("speechSynthesis" in window)) return null;
   if (_narratorVoicePicked) return _narratorVoice ?? null;
@@ -15,30 +19,42 @@ function getNarratorVoice() {
   if (!list.length) return null;
   const sName = (v) => ((v.name || "") + " " + (v.voiceURI || "")).toLowerCase();
   const isLikelyMale = (v) =>
-    /( male| daniel| david| fred| aaron| mark| thom| arthur| james| brian| gary| albert| junior| zarvox|google uk english male)/i.test(
+    /\b(male|daniel|david|fred|aaron|mark|arthur|james|brian|gary|albert|derek|guy|tom|google uk english male|microsoft david)\b|male\b/.test(
       sName(v)
     );
   const isLikelyFemale = (v) =>
-    /(samantha|karen|victoria|zira|fiona|serena|hazel|jenny|joanna|susan|martha|female|zoe|lisa|nancy|heather|hannah|sara|aria|kate|amy|linda|moira|shelley|tessa|fable)/i.test(
+    /(samantha|karen|victoria|fiona|serena|hazel|jenny|joanna|susan|martha|female|zoe|lisa|nancy|heather|hannah|sara|aria|kate|amy|linda|moira|shelley|tessa|fable|kristina|nicole|siri|ivy|zira)/i.test(
       sName(v)
     );
+  const score = (v) => {
+    const s = sName(v);
+    let n = 0;
+    if (/neural|wavenet|natural(?!-)|premium|hd\b|journey|enhanced/i.test(s)) n += 85;
+    if (/\bonline\b/i.test(s) && /microsoft|edge|aria|jenny/i.test(s)) n += 30;
+    if (isLikelyFemale(v)) n += 12;
+    if (isLikelyMale(v) && !/neural|wavenet|natural|premium|online/i.test(s)) n -= 40;
+    const L = (v.lang || "").toLowerCase();
+    if (L === "en-us" || L === "en_us" || L === "en") n += 22;
+    else if (L.startsWith("en-")) n += 10;
+    if (/samantha|fiona|moira|karen|aria|jenny|hazel|victoria/i.test(s)) n += 18;
+    if (/zarvox|festival|pipe organ|bad news|cellos|dennis\b/i.test(s)) n -= 90;
+    if (/^microsoft zira(?!.*neural)/i.test(s.trim())) n -= 25;
+    if (/google(?!.*\bwave)/.test(s) && /(english|en-us|us)/i.test(s)) n += 6;
+    return n;
+  };
   const en = list.filter((v) => (v.lang || "").toLowerCase().startsWith("en"));
-  for (const v of en) {
-    if (isLikelyMale(v)) continue;
-    if (isLikelyFemale(v)) {
-      _narratorVoice = v;
-      _narratorVoicePicked = true;
-      return v;
-    }
+  if (!en.length) {
+    _narratorVoice = list[0] || null;
+    _narratorVoicePicked = true;
+    return _narratorVoice;
   }
-  for (const v of en) {
-    if (!isLikelyMale(v)) {
-      _narratorVoice = v;
-      _narratorVoicePicked = true;
-      return v;
-    }
-  }
-  _narratorVoice = en[0] || list[0] || null;
+  en.sort((a, b) => {
+    const d = score(b) - score(a);
+    if (d !== 0) return d;
+    if (isLikelyFemale(b) !== isLikelyFemale(a)) return isLikelyFemale(b) ? 1 : -1;
+    return 0;
+  });
+  _narratorVoice = en[0] || null;
   _narratorVoicePicked = true;
   return _narratorVoice;
 }
@@ -57,8 +73,10 @@ function speak(text) {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US";
-  u.rate = 0.88;
-  u.pitch = 1.06;
+  /* Slightly below 1.0 = clearer; 1.0 pitch = flatter, less “chipmunk / toy” TTS. */
+  u.rate = 0.93;
+  u.pitch = 0.99;
+  u.volume = 1;
   const voice = getNarratorVoice();
   if (voice) u.voice = voice;
   window.speechSynthesis.speak(u);
@@ -179,10 +197,6 @@ function clear() {
 
 const norm = (s) => s.toUpperCase().replace(/[^A-Z]/g, "").trim();
 
-function questionForItem(item) {
-  return item.who ? "Who am I?" : "What am I?";
-}
-
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -230,7 +244,7 @@ function buildLocationScene(loc, { screenClass, hintText, worldClass }) {
       loc,
       screenClass.includes("mode-pick")
         ? "← Home"
-        : "← Choose game",
+        : "← Mode selection",
       () =>
         screenClass.includes("mode-pick")
           ? renderHome()
@@ -305,7 +319,7 @@ function renderHome() {
   const header = el("div", "home-header");
   header.appendChild(el("h1", "title", "English Places"));
   header.appendChild(
-    el("p", "tagline", "Choose a place, then pick a game: Match, Spell, or Say!")
+    el("p", "tagline", "Select a location, then a mode: Match, Spell, or Say.")
   );
   wrap.appendChild(header);
 
@@ -319,7 +333,7 @@ function renderHome() {
     }
     card.appendChild(mini);
     card.appendChild(el("span", "location-card__title", loc.title));
-    card.appendChild(el("span", "location-card__sub", "Tap to choose a game"));
+    card.appendChild(el("span", "location-card__sub", "Select to continue"));
     card.addEventListener("click", () => renderGameModePicker(loc.id));
     grid.appendChild(card);
   }
@@ -339,8 +353,10 @@ function renderGameModePicker(locationId) {
     })
   );
   const lead = el("div", "mode-pick__lead");
-  lead.appendChild(el("h1", "mode-pick__title", `Pick a game`));
-  lead.appendChild(el("p", "mode-pick__sub", "How do you want to learn in the " + loc.title + "?"));
+  lead.appendChild(el("h1", "mode-pick__title", "Select a mode"));
+  lead.appendChild(
+    el("p", "mode-pick__sub", "Choose the activity for the " + loc.title + " section.")
+  );
   wrap.appendChild(lead);
 
   const grid = el("div", "mode-grid");
@@ -348,17 +364,17 @@ function renderGameModePicker(locationId) {
     {
       id: MODE.match,
       title: "Match",
-      desc: "Drag each word onto the right object.",
+      desc: "Move each label to the corresponding object.",
     },
     {
       id: MODE.spell,
       title: "Spell",
-      desc: "Type the word. Use “Hear it” to listen.",
+      desc: "Type the word. Use “Hear it” to hear the word.",
     },
     {
       id: MODE.say,
       title: "Say",
-      desc: "Move near an object, then say or type the name.",
+      desc: "Each object in order. Say, hear, or type the name, then press Check.",
     },
   ];
   for (const m of modes) {
@@ -386,22 +402,22 @@ function renderMatchGame(loc) {
   clear();
   const { wrap, world, canvas, objectEls } = buildLocationScene(loc, {
     screenClass: "mode-match",
-    hintText: "Drag each name into the dashed box under the picture. Match them all!",
+    hintText: "Place each label in the dashed area under the image. Complete all items.",
     worldClass: "",
   });
 
   const bank = el("div", "match-bank");
-  const bankLabel = el("p", "match-bank__label", "Drag a word into the box under a picture:");
+  const bankLabel = el("p", "match-bank__label", "Place a label under the correct image:");
   bank.appendChild(bankLabel);
 
   const shuffled = shuffle(loc.items);
   const state = { matched: new Set() };
   const msg = el("p", "match-msg", "");
   const doneRow = el("div", "match-done is-hidden");
-  const again = el("button", "btn btn--soft", "Back to games");
+  const again = el("button", "btn btn--soft", "Return to mode selection");
   again.type = "button";
   again.addEventListener("click", () => renderGameModePicker(loc.id));
-  doneRow.appendChild(el("span", "match-done__text", "You matched them all! "));
+  doneRow.appendChild(el("span", "match-done__text", "All items are matched. "));
   doneRow.appendChild(again);
   world.appendChild(bank);
   world.appendChild(msg);
@@ -411,7 +427,7 @@ function renderMatchGame(loc) {
   function onAllMatched() {
     msg.textContent = "";
     doneRow.classList.remove("is-hidden");
-    speak("Wonderful! You matched every one! That was fantastic. I'm so proud of you.");
+    speak("All items are correct. The exercise is complete.");
   }
 
   for (const item of shuffled) {
@@ -499,8 +515,8 @@ function renderMatchGame(loc) {
               }
               if (startRef.moved) {
                 msg.textContent = hit
-                  ? "Not that one—try another object."
-                  : "Drop the word on a picture.";
+                  ? "Incorrect object. Select another image."
+                  : "Release the label over an image.";
                 setTimeout(() => (msg.textContent = ""), 2200);
               }
             }
@@ -554,7 +570,7 @@ function renderSpellGame(loc) {
   const { wrap, world, canvas, objectEls } = buildLocationScene(loc, {
     screenClass: "mode-spell",
     hintText:
-      "The highlighted object is your word. Type it, or tap Hear it. After 3 wrong checks, the answer is shown.",
+      "The highlighted object is the current item. Enter the word or use Hear it. After three failed checks, the answer is displayed.",
     worldClass: "mode-spell-world",
   });
 
@@ -573,7 +589,7 @@ function renderSpellGame(loc) {
   input.setAttribute("autocomplete", "off");
   input.setAttribute("spellcheck", "false");
   input.setAttribute("aria-label", "Type the word");
-  input.placeholder = "Type the word…";
+  input.placeholder = "Enter the word";
 
   const msg = el("p", "spell-message", "");
   const actions = el("div", "riddle-actions");
@@ -590,7 +606,7 @@ function renderSpellGame(loc) {
   riddle.appendChild(wordRow);
   riddle.appendChild(form);
   const spellExtra = el("div", "spell-extra");
-  const continueRevealed = el("button", "btn btn--primary is-hidden", "Continue to next word");
+  const continueRevealed = el("button", "btn btn--primary is-hidden", "Continue");
   continueRevealed.type = "button";
   spellExtra.appendChild(continueRevealed);
   riddle.appendChild(spellExtra);
@@ -621,8 +637,7 @@ function renderSpellGame(loc) {
   function goNext() {
     continueRevealed.classList.add("is-hidden");
     if (index >= loc.items.length - 1) {
-      msg.textContent =
-        "You spelled all the words! You worked so hard — I'm really proud of you.";
+      msg.textContent = "All words are complete. End of exercise.";
       msg.className = "spell-message spell-message--ok";
       check.disabled = true;
       input.disabled = true;
@@ -643,10 +658,10 @@ function renderSpellGame(loc) {
     for (const { el, item } of objectEls) {
       if (item.word === t) el.classList.add("scene-object--solved");
     }
-    msg.textContent = `The word is: ${t}. Press Continue for the next word.`;
+    msg.textContent = `The word is ${t}. Select Continue.`;
     msg.className = "spell-message spell-message--info";
     continueRevealed.classList.remove("is-hidden");
-    speak(`The word is ${t}. That's okay — you'll get the next one. I believe in you.`);
+    speak(`The word is ${t}.`);
   }
 
   function applyRound() {
@@ -689,7 +704,7 @@ function renderSpellGame(loc) {
 
   function triesLeftText(n) {
     if (n <= 0) return "";
-    return ` ${n} ${n === 1 ? "try" : "tries"} left.`;
+    return ` ${n} ${n === 1 ? "attempt" : "attempts"} remaining.`;
   }
 
   form.addEventListener("submit", (e) => {
@@ -709,7 +724,7 @@ function renderSpellGame(loc) {
       return;
     }
     if (guess === t) {
-      msg.textContent = `That’s it — ${t}. Perfect spelling!`;
+      msg.textContent = `Correct: ${t}.`;
       msg.className = "spell-message spell-message--ok";
       const isLast = index >= loc.items.length - 1;
       playClap(isLast ? 5 : 3);
@@ -718,12 +733,10 @@ function renderSpellGame(loc) {
       }
       if (isLast) {
         speak(
-          `You did it! The word is ${t}. You spelled every single one! What amazing work. I'm so proud of you!`
+          `Correct. The word is ${t}. All items are complete. The exercise is finished.`
         );
       } else {
-        speak(
-          `That’s it — ${t}. You spelled it beautifully! Keep going — you’re doing great!`
-        );
+        speak(`Correct. The word is ${t}.`);
       }
       window.setTimeout(() => goNext(), isLast ? 5200 : 900);
     } else {
@@ -734,7 +747,7 @@ function renderSpellGame(loc) {
       }
       const left = 3 - wrongCount;
       msg.textContent =
-        `Try again, or use Hear it. ${left} ${left === 1 ? "try" : "tries"} before the answer is shown.`;
+        `Incorrect. You may use Hear it. ${left} ${left === 1 ? "attempt" : "attempts"} remain before the answer is shown.`;
       msg.className = "spell-message spell-message--err";
     }
   });
@@ -744,42 +757,80 @@ function renderSpellGame(loc) {
 
 function renderSayGame(loc) {
   clear();
-  const { wrap, world, canvas, objectEls } = buildLocationScene(loc, {
+  const { wrap, world, objectEls } = buildLocationScene(loc, {
     screenClass: "mode-say",
     hintText:
-      "Use Say it, Hear it, and Check under each picture, or point near a picture to open the word box.",
-    worldClass: "",
+      "The highlighted object is the current item. Use Say it, Hear it, or type the word, then press Check. After three failed checks, the answer is displayed.",
+    worldClass: "mode-spell-world",
   });
 
-  const riddle = el("div", "riddle-panel is-hidden");
+  let index = 0;
+  let wrongCount = 0;
+  let answerRevealed = false;
+  let activeRec = null;
+
+  const riddle = el("div", "riddle-panel spell-panel");
   riddle.setAttribute("aria-live", "polite");
-  const riddleQ = el("h3", "riddle-panel__q", "");
+  const progress = el("p", "spell-progress", "");
+  const riddleQ = el("h3", "riddle-panel__q", "Say the word");
   const wordRow = el("div", "word-length");
   const form = el("form", "riddle-form");
   const input = el("input", "spell-input");
   input.setAttribute("autocapitalize", "characters");
   input.setAttribute("autocomplete", "off");
   input.setAttribute("spellcheck", "false");
-  input.setAttribute("aria-label", "Type the name");
-  input.placeholder = "Type the word…";
+  input.setAttribute("aria-label", "Type the word");
+  input.placeholder = "Enter the word";
+
   const msg = el("p", "spell-message", "");
   const micNote = el("p", "riddle-aux", "");
   if (!getSpeechRecognition()) {
     micNote.textContent =
-      "Saying the word needs a supported browser. You can still type.";
+      "Speech input requires a supported browser. The text field remains available.";
   }
+
+  const actions = el("div", "riddle-actions");
+  const sayBtn = el("button", "btn btn--soft", "🎤 Say it");
+  sayBtn.type = "button";
+  if (!getSpeechRecognition()) {
+    sayBtn.disabled = true;
+    sayBtn.classList.add("is-disabled");
+  }
+  const listen = el("button", "btn btn--soft", "Hear it");
+  listen.type = "button";
+  const check = el("button", "btn btn--primary", "Check");
+  check.type = "submit";
+  actions.appendChild(sayBtn);
+  actions.appendChild(listen);
+  actions.appendChild(check);
   form.appendChild(input);
+  form.appendChild(actions);
+  riddle.appendChild(progress);
   riddle.appendChild(riddleQ);
   riddle.appendChild(wordRow);
   riddle.appendChild(form);
+  const spellExtra = el("div", "spell-extra");
+  const continueRevealed = el("button", "btn btn--primary is-hidden", "Continue");
+  continueRevealed.type = "button";
+  spellExtra.appendChild(continueRevealed);
+  riddle.appendChild(spellExtra);
   riddle.appendChild(micNote);
   riddle.appendChild(msg);
+  world.appendChild(riddle);
+  app.appendChild(wrap);
 
-  let active = null;
-  let hideTimer = 0;
-  let activeRec = null;
-  /** Tight hit area: icon only; row lock avoids grabbing the row below when moving toward the answer panel. */
-  const PROX_FUDGE = 0.35;
+  function stopMic() {
+    if (activeRec) {
+      try {
+        activeRec.stop();
+      } catch (_) {}
+      activeRec = null;
+    }
+  }
+
+  function resetSayButton() {
+    sayBtn.textContent = "🎤 Say it";
+  }
 
   function setWordSlots(word) {
     wordRow.replaceChildren();
@@ -794,87 +845,80 @@ function renderSayGame(loc) {
     }
   }
 
-  function resetAllSayMics() {
-    for (const e of objectEls) {
-      if (e.sayMic) e.sayMic.textContent = "🎤 Say it";
+  function setHighlight(item) {
+    for (const { el: o, item: it } of objectEls) {
+      o.classList.toggle("scene-object--spell-focus", Boolean(item) && it.word === item.word);
     }
   }
 
-  function setActiveEntry(entry) {
-    if (activeRec) {
-      try {
-        activeRec.stop();
-      } catch (_) {}
-      activeRec = null;
-    }
-    if (!entry) {
-      active = null;
-      resetAllSayMics();
-      riddle.classList.add("is-hidden");
-      riddle.setAttribute("aria-hidden", "true");
-      for (const { el: o } of objectEls) o.classList.remove("scene-object--near");
+  function triesLeftText(n) {
+    if (n <= 0) return "";
+    return ` ${n} ${n === 1 ? "attempt" : "attempts"} remaining.`;
+  }
+
+  function goNext() {
+    continueRevealed.classList.add("is-hidden");
+    if (index >= loc.items.length - 1) {
+      msg.textContent = "All words are complete. End of exercise.";
+      msg.className = "spell-message spell-message--ok";
+      check.disabled = true;
+      sayBtn.disabled = true;
+      listen.disabled = true;
+      input.disabled = true;
+      setHighlight(null);
       return;
     }
-    active = entry;
-    for (const { el: o, item } of objectEls) {
-      o.classList.toggle("scene-object--near", item.word === entry.item.word);
+    index += 1;
+    applyRound();
+  }
+
+  function showAnswerAfterTries() {
+    const t = loc.items[index].word;
+    answerRevealed = true;
+    stopMic();
+    resetSayButton();
+    input.value = t;
+    input.disabled = true;
+    check.disabled = true;
+    sayBtn.disabled = true;
+    updateSlots(t);
+    for (const { el, item } of objectEls) {
+      if (item.word === t) el.classList.add("scene-object--solved");
     }
-    riddle.classList.remove("is-hidden");
-    riddle.setAttribute("aria-hidden", "false");
-    riddleQ.textContent = questionForItem(entry.item);
-    setWordSlots(entry.item.word);
+    msg.textContent = `The word is ${t}. Select Continue.`;
+    msg.className = "spell-message spell-message--info";
+    continueRevealed.classList.remove("is-hidden");
+    speak(`The word is ${t}.`);
+  }
+
+  function applyRound() {
+    const it = loc.items[index];
+    stopMic();
+    resetSayButton();
+    answerRevealed = false;
+    wrongCount = 0;
+    continueRevealed.classList.add("is-hidden");
+    if (!getSpeechRecognition()) {
+      sayBtn.disabled = true;
+    } else {
+      sayBtn.disabled = false;
+    }
+    input.disabled = false;
+    check.disabled = false;
+    listen.disabled = false;
+    progress.textContent = `Word ${index + 1} of ${loc.items.length}`;
+    setWordSlots(it.word);
     input.value = "";
-    input.setAttribute("maxlength", String(entry.item.word.length));
+    input.setAttribute("maxlength", String(it.word.length));
     updateSlots("");
     msg.textContent = "";
     msg.className = "spell-message";
-    resetAllSayMics();
-    speak(riddleQ.textContent);
-  }
-
-  function getNearEntry(clientX, clientY) {
-    const yT = loc.rowYTop != null ? loc.rowYTop : 30;
-    const yB = loc.rowYBottom != null ? loc.rowYBottom : 72;
-    const cr = canvas.getBoundingClientRect();
-    if (cr.height < 1) return null;
-    const yTopPx = cr.top + (cr.height * yT) / 100;
-    const yBottomPx = cr.top + (cr.height * yB) / 100;
-    const dTop = Math.abs(clientY - yTopPx);
-    const dBottom = Math.abs(clientY - yBottomPx);
-    const preferRow = dTop <= dBottom ? 0 : 1;
-
-    let best = null;
-    let bestD = Infinity;
-    for (const entry of objectEls) {
-      if (entry.row !== preferRow) continue;
-      const parts = [
-        entry.el.querySelector(".scene-object__icon"),
-        entry.el.querySelector(".scene-object__actions"),
-      ].filter(Boolean);
-      for (const hitEl of parts) {
-        const r = hitEl.getBoundingClientRect();
-        const cx = (r.left + r.right) / 2;
-        const cy = (r.top + r.bottom) / 2;
-        const halfW = ((r.width || 48) * (1 + PROX_FUDGE)) / 2 + 8;
-        const halfH = ((r.height || 48) * (1 + PROX_FUDGE)) / 2 + 8;
-        const dx = clientX - cx;
-        const dy = clientY - cy;
-        if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
-          const d = dx * dx + dy * dy;
-          if (d < bestD) {
-            bestD = d;
-            best = entry;
-          }
-        }
-      }
-    }
-    return best;
+    setHighlight(it);
+    input.focus();
   }
 
   function startMic() {
-    if (!active) return;
-    const micBtn = active.sayMic;
-    if (!micBtn || micBtn.disabled) return;
+    if (index >= loc.items.length || answerRevealed) return;
     if (activeRec) {
       try {
         activeRec.stop();
@@ -883,26 +927,27 @@ function renderSayGame(loc) {
     }
     const R = getSpeechRecognition();
     if (!R) return;
+    const target = loc.items[index].word;
     R.lang = "en-US";
     R.interimResults = false;
     R.maxAlternatives = 3;
     R.onerror = () => {
       activeRec = null;
-      resetAllSayMics();
-      msg.textContent = "Could not hear. Try again or use the box.";
+      resetSayButton();
+      msg.textContent = "Input was not recognized. Repeat the attempt or use the text field.";
       msg.className = "spell-message spell-message--info";
     };
     R.onend = () => {
       activeRec = null;
-      resetAllSayMics();
+      resetSayButton();
     };
     R.onresult = (ev) => {
-      if (!active) return;
+      if (index >= loc.items.length) return;
       const res = ev.results[0];
       for (let i = 0; i < res.length; i++) {
         const g = norm(res[i].transcript);
         if (g) {
-          input.value = g.slice(0, active.item.word.length);
+          input.value = g.slice(0, target.length);
           updateSlots(input.value);
           break;
         }
@@ -911,150 +956,87 @@ function renderSayGame(loc) {
     try {
       R.start();
       activeRec = R;
-      resetAllSayMics();
-      micBtn.textContent = "⏹ Stop";
-      msg.textContent = "Listening…";
+      sayBtn.textContent = "⏹ Stop";
+      msg.textContent = "Listening for input…";
       msg.className = "spell-message spell-message--info";
     } catch (_) {
       activeRec = null;
-      resetAllSayMics();
+      resetSayButton();
     }
   }
 
-  let riddleOver = false;
-  riddle.addEventListener("pointerenter", () => {
-    riddleOver = true;
-  });
-  riddle.addEventListener("pointerleave", (e) => {
-    riddleOver = false;
-    onPointerAt(e.clientX, e.clientY);
+  continueRevealed.addEventListener("click", () => {
+    if (!answerRevealed) return;
+    goNext();
   });
 
-  function onPointerAt(clientX, clientY) {
-    if (riddleOver) return;
-    const near = getNearEntry(clientX, clientY);
-    if (near) {
-      if (window.clearTimeout) {
-        if (hideTimer) clearTimeout(hideTimer);
-        hideTimer = 0;
-      }
-      if (!active || active.item.word !== near.item.word) {
-        setActiveEntry(near);
-      }
-    } else {
-      if (!riddleOver) {
-        if (window.clearTimeout) {
-          if (hideTimer) clearTimeout(hideTimer);
-          hideTimer = window.setTimeout(() => {
-            if (!riddleOver) setActiveEntry(null);
-          }, 500);
-        }
-      }
-    }
-  }
+  sayBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    startMic();
+  });
 
-  function handleMove(e) {
-    const t = e.touches ? e.touches[0] : e;
-    onPointerAt(t.clientX, t.clientY);
-  }
-
-  function runCheckForEntry(entry) {
-    if (!active || active.item.word !== entry.item.word) {
-      setActiveEntry(entry);
-    }
-    const target = entry.item.word;
-    const guess = input.value.toUpperCase().trim();
-    if (guess.length !== target.length) {
-      msg.textContent = `The word has ${target.length} letters.`;
-      msg.className = "spell-message spell-message--info";
-      return;
-    }
-    if (guess === target) {
-      const allSolved = (() => {
-        for (const { el: o, item } of objectEls) {
-          if (item.word === target) o.classList.add("scene-object--solved");
-        }
-        return objectEls.every(({ el: oel }) =>
-          oel.classList.contains("scene-object--solved")
-        );
-      })();
-      msg.textContent = allSolved
-        ? `You got it — ${target}. You did every single one!`
-        : `That’s it — it’s ${target}. Well done!`;
-      msg.className = "spell-message spell-message--ok";
-      playClap(allSolved ? 5 : 3);
-      speak(
-        allSolved
-          ? `You got it! It is ${target}. You finished them all! I'm so happy for you — wonderful job!`
-          : `That’s it! It is ${target}. You said it so well! I'm cheering for you.`
-      );
-    } else {
-      msg.textContent =
-        "Not quite. Try “Hear it” or “Say it” under the same picture, or type again.";
-      msg.className = "spell-message spell-message--err";
-    }
-  }
-
-  for (const entry of objectEls) {
-    const row = el("div", "scene-object__actions");
-    const micBtn = el("button", "btn btn--soft scene-object__action scene-object__say-mic", "🎤 Say it");
-    micBtn.type = "button";
-    if (!getSpeechRecognition()) {
-      micBtn.disabled = true;
-      micBtn.classList.add("is-disabled");
-    }
-    const hearBtn = el("button", "btn btn--soft scene-object__action scene-object__hear", "Hear it");
-    hearBtn.type = "button";
-    const checkBtn = el("button", "btn btn--primary scene-object__action scene-object__check", "Check");
-    checkBtn.type = "button";
-    entry.sayMic = micBtn;
-    row.appendChild(micBtn);
-    row.appendChild(hearBtn);
-    row.appendChild(checkBtn);
-    entry.el.appendChild(row);
-    micBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (!active || active.item.word !== entry.item.word) {
-        setActiveEntry(entry);
-      }
-      startMic();
-    });
-    hearBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (!active || active.item.word !== entry.item.word) {
-        setActiveEntry(entry);
-      }
-      speak(entry.item.word);
-    });
-    checkBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      runCheckForEntry(entry);
-    });
-  }
-
-  world.appendChild(riddle);
-  canvas.addEventListener("pointermove", handleMove, { passive: true });
-  canvas.addEventListener("pointerdown", handleMove, { passive: true });
-  canvas.addEventListener("touchmove", handleMove, { passive: true });
-  app.appendChild(wrap);
+  listen.addEventListener("click", () => {
+    if (index < loc.items.length && !answerRevealed) speak(loc.items[index].word);
+  });
 
   input.addEventListener("input", () => {
-    if (!active) return;
-    const max = active.item.word.length;
+    if (index >= loc.items.length || answerRevealed) return;
+    const t = loc.items[index].word;
+    const max = t.length;
     const v = input.value.toUpperCase().replace(/[^A-Z]/g, "");
     input.value = v.slice(0, max);
     updateSlots(input.value);
     msg.textContent = "";
     msg.className = "spell-message";
   });
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!active) return;
-    runCheckForEntry(active);
+    if (index >= loc.items.length) return;
+    if (answerRevealed) return;
+    const t = loc.items[index].word;
+    const guess = input.value.toUpperCase().trim();
+    if (guess.length !== t.length) {
+      wrongCount += 1;
+      if (wrongCount >= 3) {
+        showAnswerAfterTries();
+        return;
+      }
+      msg.textContent = `The word has ${t.length} letters.${triesLeftText(3 - wrongCount)}`;
+      msg.className = "spell-message spell-message--info";
+      return;
+    }
+    if (guess === t) {
+      stopMic();
+      msg.textContent = `Correct: ${t}.`;
+      msg.className = "spell-message spell-message--ok";
+      const isLast = index >= loc.items.length - 1;
+      for (const { el, item } of objectEls) {
+        if (item.word === t) el.classList.add("scene-object--solved");
+      }
+      playClap(isLast ? 5 : 3);
+      if (isLast) {
+        speak(
+          `Correct. The word is ${t}. All items are complete. The exercise is finished.`
+        );
+      } else {
+        speak(`Correct. The word is ${t}.`);
+      }
+      window.setTimeout(() => goNext(), isLast ? 5200 : 900);
+    } else {
+      wrongCount += 1;
+      if (wrongCount >= 3) {
+        showAnswerAfterTries();
+        return;
+      }
+      const left = 3 - wrongCount;
+      msg.textContent =
+        `Incorrect. You may use Hear it or Say it, or re-enter the response. ${left} ${left === 1 ? "attempt" : "attempts"} remain before the answer is shown.`;
+      msg.className = "spell-message spell-message--err";
+    }
   });
+
+  applyRound();
 }
 
 renderHome();
